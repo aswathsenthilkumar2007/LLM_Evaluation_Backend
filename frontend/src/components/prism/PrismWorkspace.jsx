@@ -799,6 +799,7 @@ function ScoreOrbit({ responses }) {
   if (!scored.length) {
     return <EmptyState>No returned quality scores to chart yet.</EmptyState>
   }
+  const leader = scored.find((item) => item.rank === 1) || scored[0]
   const rings = [...scored].reverse().slice(0, 6)
   return (
     <div className="orbit-layout">
@@ -823,23 +824,35 @@ function ScoreOrbit({ responses }) {
         })}
         <text className="orbit-center-label" x="100" y="96" textAnchor="middle">QUALITY</text>
         <text className="orbit-center-value" x="100" y="119" textAnchor="middle">
-          {formatAverage([Math.max(...scored.map((item) => Number(item.quality_score)))])}
+          {formatScore(Math.max(...scored.map((item) => Number(item.quality_score))))}
         </text>
       </svg>
       <ul className="orbit-legend">
         {scored.map((item) => (
           <li key={item.analytics_key || item.model}>
-            <span className={`legend-dot provider-bg-${providerInfo(item.model).theme}`} />
-            <span>{providerInfo(item.model).shortName}</span>
-            <strong>{formatAverage([item.quality_score])}</strong>
+            <span className={`legend-dot model-chart-legend-dot provider-bg-${providerInfo(item.model).theme}`} />
+            <span className="orbit-model-name">
+              {providerInfo(item.model).shortName}
+              <small>{item.model_id}</small>
+            </span>
+            <strong>{formatScore(item.quality_score)}</strong>
+            {item.analytics_key === leader.analytics_key
+              && item.model === leader.model
+              && item.model_id === leader.model_id && (
+              <span className="orbit-leader-tag">Top</span>
+            )}
           </li>
         ))}
       </ul>
+      <p className="orbit-leader-summary">
+        Highest score: <strong>{providerInfo(leader.model).name}</strong>
+        {' · '}{formatScore(leader.quality_score)} / 100
+      </p>
     </div>
   )
 }
 
-function MetricRadar({ responses }) {
+function MetricRadar({ responses, metricAverages }) {
   const scored = responses.filter((item) => (
     item.scores
     && SCORE_DIMENSIONS.every(({ key }) => (
@@ -884,13 +897,20 @@ function MetricRadar({ responses }) {
         {SCORE_DIMENSIONS.map(({ key, label }) => (
           <li key={key}>
             <span>{label}</span>
-            <strong>{formatAverage(available.map((item) => item.scores?.[key])) ?? '—'}/5</strong>
+            <strong>
+              {metricAverages
+                ? (metricAverages[key] == null ? '—' : `${formatScore(metricAverages[key])}/5`)
+                : `${formatAverage(available.map((item) => item.scores?.[key])) ?? '—'}/5`}
+            </strong>
           </li>
         ))}
       </ul>
       <div className="radar-legend">
         {scored.map((item) => (
-          <span key={item.analytics_key || item.model}><i className={`legend-dot provider-bg-${providerInfo(item.model).theme}`} />{providerInfo(item.model).shortName}</span>
+          <span key={item.analytics_key || item.model}>
+            <i className={`legend-dot model-chart-legend-dot provider-bg-${providerInfo(item.model).theme}`} />
+            <span>{providerInfo(item.model).shortName}<small>{item.model_id}</small></span>
+          </span>
         ))}
       </div>
       {available.length > scored.length && (
@@ -900,7 +920,69 @@ function MetricRadar({ responses }) {
   )
 }
 
-function ScoreTrend({ history, scope = 'this browser session' }) {
+function ScoreTrend({
+  history,
+  scope = 'this browser session',
+  series: aggregatedSeries,
+  turnCount,
+}) {
+  if (aggregatedSeries) {
+    const series = aggregatedSeries.filter((item) => item.points.length)
+    if (!series.length) return <EmptyState>No scored evaluations to plot yet.</EmptyState>
+
+    const width = 360
+    const height = 150
+    const padding = 18
+    const x = (index) => turnCount === 1
+      ? width / 2
+      : padding + index * (width - 2 * padding) / (turnCount - 1)
+    const y = (score) => height - padding - Math.min(100, Math.max(0, score)) * (height - 2 * padding) / 100
+    const dashPatterns = ['', '5 3', '2 3', '8 3 2 3']
+
+    return (
+      <div className="trend-chart">
+        <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Model quality scores across chronological conversation turns">
+          {[0, 50, 100].map((score) => (
+            <line key={score} className="trend-gridline" x1={padding} y1={y(score)} x2={width - padding} y2={y(score)} />
+          ))}
+          {series.map((modelSeries, index) => (
+            <g
+              key={modelSeries.analytics_key}
+              className={`trend-series provider-trend-${providerInfo(modelSeries.model).theme}`}
+            >
+              {modelSeries.points.length > 1 && (
+                <polyline
+                  points={modelSeries.points.map((point) => `${x(point.turnIndex)},${y(point.quality_score)}`).join(' ')}
+                  style={{ strokeDasharray: dashPatterns[index % dashPatterns.length] || undefined }}
+                />
+              )}
+              {modelSeries.points.map((point) => (
+                <circle
+                  key={point.turnIndex}
+                  cx={x(point.turnIndex)}
+                  cy={y(point.quality_score)}
+                  r="3"
+                />
+              ))}
+            </g>
+          ))}
+        </svg>
+        <div className="trend-labels"><span>1</span><span>{turnCount} chronological turn{turnCount === 1 ? '' : 's'}</span><span>100</span></div>
+        <div className="trend-legend">
+          {series.map((modelSeries, index) => (
+            <span key={modelSeries.analytics_key}>
+              <i
+                className={`legend-dot model-chart-legend-dot provider-bg-${providerInfo(modelSeries.model).theme}`}
+                style={{ borderRadius: index % 2 ? '2px' : '50%' }}
+              />
+              <span>{providerInfo(modelSeries.model).shortName}<small>{modelSeries.model_id}</small></span>
+            </span>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
   const runs = [...history].reverse()
   const allValues = runs.map((run, index) => ({
     index,
@@ -949,7 +1031,10 @@ function LatencyChart({ responses }) {
     <div className="latency-chart">
       {rows.map((item) => (
         <div className="latency-row" key={item.analytics_key || item.model}>
-          <span className={`latency-provider provider-text-${providerInfo(item.model).theme}`}>{providerInfo(item.model).shortName}</span>
+          <span className={`latency-provider provider-text-${providerInfo(item.model).theme}`}>
+            {providerInfo(item.model).shortName}
+            {item.model_id && <small>{item.model_id}</small>}
+          </span>
           <span className="latency-track"><i className={`provider-fill-${providerInfo(item.model).theme}`} style={{ width: `${Math.min(100, (Number(item.response_time_ms) / max) * 100)}%` }} /></span>
           <strong>{formatTime(item.response_time_ms)}</strong>
         </div>
@@ -1213,6 +1298,12 @@ function averageScore(values) {
   return valid.length ? Math.round(valid.reduce((sum, value) => sum + value, 0) / valid.length) : null
 }
 
+function formatScore(value) {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? Number(value.toFixed(1))
+    : 'N/A'
+}
+
 function meanValue(values) {
   const valid = values.filter((value) => typeof value === 'number' && Number.isFinite(value))
   return valid.length
@@ -1230,56 +1321,151 @@ function formatTime(value) {
   return `${Math.round(Number(value))} ms`
 }
 
-function aggregateConversationResponses(turns) {
-  const groups = new Map()
-  for (const turn of turns) {
-    for (const response of turn.result?.responses || []) {
-      const analyticsKey = `${response.model}:${response.model_id || ''}`
-      if (!groups.has(analyticsKey)) {
-        groups.set(analyticsKey, { analyticsKey, responses: [] })
-      }
-      groups.get(analyticsKey).responses.push(response)
-    }
+function aggregateConversationAnalytics(turns) {
+  function mean(values) {
+    const available = values.filter((value) => (
+      typeof value === 'number' && Number.isFinite(value)
+    ))
+    return available.length
+      ? available.reduce((sum, value) => sum + value, 0) / available.length
+      : null
   }
 
-  return [...groups.values()].map(({ analyticsKey, responses }) => {
-    const latest = responses[responses.length - 1]
+  const sortedTurns = [...turns].sort((left, right) => (
+    String(left.created_at || '').localeCompare(String(right.created_at || ''))
+    || String(left.id || '').localeCompare(String(right.id || ''))
+  ))
+  const seenTurnIds = new Set()
+  const uniqueTurns = sortedTurns.filter((turn) => {
+    const id = turn.id ?? `${turn.created_at || ''}:${turn.prompt || ''}`
+    if (seenTurnIds.has(id)) return false
+    seenTurnIds.add(id)
+    return true
+  })
+  const groups = new Map()
+  const trendSeries = new Map()
+
+  uniqueTurns.forEach((turn, turnIndex) => {
+    const result = turn.result || {}
+    const evaluationAvailable = !['failed', 'not_run'].includes(result.evaluation_status)
+    const responsesByModel = new Map()
+    for (const response of result.responses || []) {
+      const key = `${response.model}:${response.model_id || response.model}`
+      if (!responsesByModel.has(key)) responsesByModel.set(key, response)
+    }
+
+    for (const [analyticsKey, response] of responsesByModel) {
+      if (!groups.has(analyticsKey)) {
+        groups.set(analyticsKey, {
+          analytics_key: analyticsKey,
+          model: response.model,
+          provider: response.provider,
+          model_id: response.model_id,
+          quality_scores: [],
+          response_times: [],
+          metric_scores: Object.fromEntries(SCORE_DIMENSIONS.map(({ key }) => [key, []])),
+          scored_turn_count: 0,
+          response_turn_count: 0,
+        })
+      }
+      const group = groups.get(analyticsKey)
+      const generationSucceeded = (
+        response.error == null
+        && typeof response.response === 'string'
+        && response.response.trim().length > 0
+      )
+      if (!generationSucceeded) continue
+
+      group.response_turn_count += 1
+      if (typeof response.response_time_ms === 'number'
+        && Number.isFinite(response.response_time_ms)
+        && response.response_time_ms >= 0) {
+        group.response_times.push(response.response_time_ms)
+      }
+
+      if (!evaluationAvailable || response.score_error != null) continue
+
+      for (const { key } of SCORE_DIMENSIONS) {
+        const score = response.scores?.[key]
+        if (Number.isInteger(score) && score >= 1 && score <= 5) {
+          group.metric_scores[key].push(score)
+        }
+      }
+
+      const qualityScore = response.quality_score
+      if (typeof qualityScore !== 'number'
+        || !Number.isFinite(qualityScore)
+        || qualityScore < 0
+        || qualityScore > 100) {
+        continue
+      }
+
+      group.quality_scores.push(qualityScore)
+      group.scored_turn_count += 1
+      if (!trendSeries.has(analyticsKey)) {
+        trendSeries.set(analyticsKey, {
+          analytics_key: analyticsKey,
+          model: response.model,
+          model_id: response.model_id,
+          points: [],
+        })
+      }
+      trendSeries.get(analyticsKey).points.push({ turnIndex, quality_score: qualityScore })
+    }
+  })
+
+  const models = [...groups.values()].map((group) => {
     const scores = Object.fromEntries(
-      DETAILED_SCORE_DIMENSIONS.map(({ key }) => [
-        key,
-        meanValue(responses.map((response) => response.scores?.[key])),
-      ]),
+      SCORE_DIMENSIONS.map(({ key }) => [key, mean(group.metric_scores[key])]),
     )
-    const hasScores = Object.values(scores).some((score) => score != null)
     return {
-      ...latest,
-      analytics_key: analyticsKey,
-      quality_score: meanValue(responses.map((response) => response.quality_score)),
-      response_time_ms: meanValue(responses.map((response) => response.response_time_ms)),
-      scores: hasScores ? scores : null,
-      scored_turn_count: responses.filter((response) => response.quality_score != null).length,
+      analytics_key: group.analytics_key,
+      model: group.model,
+      provider: group.provider,
+      model_id: group.model_id,
+      scores,
+      quality_score: mean(group.quality_scores),
+      response_time_ms: mean(group.response_times),
+      scored_turn_count: group.scored_turn_count,
+      response_turn_count: group.response_turn_count,
       rank: null,
     }
   })
-}
 
-function ConversationLeaderboard({ responses }) {
-  const ranked = responses
-    .filter((response) => response.quality_score != null)
+  const rankedModels = models
+    .filter((model) => model.quality_score != null)
     .sort((left, right) => (
       right.quality_score - left.quality_score
       || (left.response_time_ms ?? Number.POSITIVE_INFINITY)
         - (right.response_time_ms ?? Number.POSITIVE_INFINITY)
       || left.model.localeCompare(right.model)
+      || String(left.model_id || left.model).localeCompare(String(right.model_id || right.model))
     ))
+    .map((model, index) => ({ ...model, rank: index + 1 }))
+  const ranks = new Map(rankedModels.map((model) => [model.analytics_key, model.rank]))
 
+  return {
+    models: models.map((model) => ({ ...model, rank: ranks.get(model.analytics_key) ?? null })),
+    rankedModels,
+    trendSeries: [...trendSeries.values()],
+    turnCount: uniqueTurns.length,
+    metricAverages: Object.fromEntries(
+      SCORE_DIMENSIONS.map(({ key }) => [
+        key,
+        mean(models.map((model) => model.scores[key])),
+      ]),
+    ),
+  }
+}
+
+function ConversationLeaderboard({ analytics }) {
   return (
     <GlassCard className="section-card conversation-leaderboard">
       <SectionTitle
         title="Final leaderboard"
-        description="Mean backend quality scores, with mean latency as the tie-breaker used by the per-turn evaluator."
+        description="Ranked from the unified model averages; mean response time breaks quality-score ties."
       />
-      {ranked.length ? (
+      {analytics.rankedModels.length ? (
         <div className="conversation-leaderboard-scroll">
           <table className="conversation-leaderboard-table">
             <thead>
@@ -1295,94 +1481,80 @@ function ConversationLeaderboard({ responses }) {
               </tr>
             </thead>
             <tbody>
-              {ranked.map((response, index) => (
-                <tr key={response.analytics_key} className={index === 0 ? 'is-conversation-leader' : ''}>
-                  <td>#{index + 1}{index === 0 && <span className="conversation-winner-tag">Leader</span>}</td>
+              {analytics.rankedModels.map((response) => (
+                <tr key={response.analytics_key} className={response.rank === 1 ? 'is-conversation-leader' : ''}>
+                  <td>#{response.rank}{response.rank === 1 && <span className="conversation-winner-tag">Leader</span>}</td>
                   <th scope="row">
                     <strong>{providerInfo(response.model).name}</strong>
                     <small>{response.model_id}</small>
                   </th>
-                  <td>{formatAverage([response.quality_score])} / 100</td>
+                  <td>{formatScore(response.quality_score)} / 100</td>
                   <td>{formatTime(response.response_time_ms)}</td>
                   {SCORE_DIMENSIONS.map(({ key }) => (
                     <td key={key}>
                       {response.scores?.[key] == null
                         ? 'N/A'
-                        : `${formatAverage([response.scores[key]])} / 5`}
+                        : `${formatScore(response.scores[key])} / 5`}
                     </td>
                   ))}
-                  <td>{response.scored_turn_count}</td>
+                  <td>{response.scored_turn_count} / {analytics.turnCount}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
       ) : (
-        <EmptyState>No conversation-wide leaderboard is available until responses have complete overall scores.</EmptyState>
+        <EmptyState>No leaderboard is available until responses have complete overall scores.</EmptyState>
       )}
     </GlassCard>
   )
 }
 
 function ConversationAnalytics({ turns }) {
-  const currentTurn = turns[turns.length - 1]
-  const currentResponses = currentTurn?.result?.responses || []
-  const conversationAverages = aggregateConversationResponses(turns)
-  const trendHistory = [...turns].reverse()
+  const analytics = aggregateConversationAnalytics(turns)
+  const leader = analytics.rankedModels[0]
 
   return (
     <>
       <section className="analytics-section conversation-analytics">
         <SectionTitle
-          kicker="TURN AND CONVERSATION ANALYTICS"
-          title="Evaluation analytics"
-          description="Current-turn results are separated from conversation-wide averages. Missing evaluations are excluded, not replaced."
+          kicker="PERSISTED CONVERSATION EVALUATIONS"
+          title="Unified evaluation dashboard"
+          description={`Aggregated results from ${analytics.turnCount} unique chronological turn${analytics.turnCount === 1 ? '' : 's'}. Failed evaluations and unavailable values are excluded.`}
         />
-        <div className="conversation-analytics-scope">
-          <span>Current turn</span>
-          <small>{currentTurn ? `Turn ${turns.length} · values from this turn only` : 'No evaluated turns yet'}</small>
-        </div>
+        {leader && (
+          <div className="conversation-analytics-leader">
+            <span>Highest overall score</span>
+            <strong>{providerInfo(leader.model).name} · {leader.model_id}</strong>
+            <b>{formatScore(leader.quality_score)} / 100</b>
+          </div>
+        )}
         <div className="analytics-grid">
           <GlassCard className="analytics-card">
-            <SectionTitle title="Score Orbit" description="Current-turn overall quality per model" />
-            <ScoreOrbit responses={currentResponses} />
+            <SectionTitle title="Score Orbit" description="Mean overall evaluator score per model" />
+            <ScoreOrbit responses={analytics.rankedModels} />
           </GlassCard>
           <GlassCard className="analytics-card">
-            <SectionTitle title="Metric Share" description="Current-turn scores across available evaluation dimensions" />
-            <MetricRadar responses={currentResponses} />
+            <SectionTitle title="Metric Share" description="Per-model means for available rubric dimensions" />
+            <MetricRadar responses={analytics.models} metricAverages={analytics.metricAverages} />
           </GlassCard>
           <div className="analytics-stack">
             <GlassCard className="analytics-card trend-panel">
-              <SectionTitle title="Quality Trend" description={`All ${turns.length} turns in this conversation`} />
-              <ScoreTrend history={trendHistory} scope="this conversation" />
+              <SectionTitle title="Quality Trend" description="Successful model scores by chronological turn" />
+              <ScoreTrend
+                series={analytics.trendSeries}
+                turnCount={analytics.turnCount}
+                scope="this conversation"
+              />
             </GlassCard>
             <GlassCard className="analytics-card latency-panel">
-              <SectionTitle title="Response Time" description="Current-turn provider latency" />
-              <LatencyChart responses={currentResponses} />
+              <SectionTitle title="Response Time" description="Mean latency for successful provider responses" />
+              <LatencyChart responses={analytics.models} />
             </GlassCard>
           </div>
         </div>
-
-        <div className="conversation-analytics-scope">
-          <span>Conversation-wide</span>
-          <small>Means across available evaluated turns; per-turn ranks remain unchanged.</small>
-        </div>
-        <div className="analytics-grid conversation-average-grid">
-          <GlassCard className="analytics-card">
-            <SectionTitle title="Score Orbit" description="Mean overall quality per model" />
-            <ScoreOrbit responses={conversationAverages} />
-          </GlassCard>
-          <GlassCard className="analytics-card">
-            <SectionTitle title="Metric Share" description="Mean of each available rubric metric" />
-            <MetricRadar responses={conversationAverages} />
-          </GlassCard>
-          <GlassCard className="analytics-card">
-            <SectionTitle title="Response Time" description="Mean provider latency across conversation turns" />
-            <LatencyChart responses={conversationAverages} />
-          </GlassCard>
-        </div>
       </section>
-      <ConversationLeaderboard responses={conversationAverages} />
+      <ConversationLeaderboard analytics={analytics} />
     </>
   )
 }
