@@ -9,6 +9,10 @@
 }
 
 .theme-prism {
+  --model-line-gemini: #4285F4;
+  --model-line-nvidia: #76B900;
+  --model-line-groq: #F97316;
+  --model-line-ollama: #A855F7;
   position: relative;
   isolation: isolate;
   min-height: 100vh;
@@ -1799,6 +1803,22 @@
   font-size: 9px;
 }
 
+.radar-legend span > span {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.radar-legend small,
+.latency-provider small {
+  max-width: 120px;
+  overflow: hidden;
+  color: var(--muted-foreground);
+  font-size: 8px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .trend-chart {
   width: 100%;
 }
@@ -1880,6 +1900,10 @@
 
 .latency-provider {
   color: var(--muted-foreground);
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+  white-space: normal;
 }
 
 .latency-row > strong {
@@ -3084,6 +3108,78 @@
   fill: var(--provider-color, #D4D4D4);
 }
 
+.orbit-value.provider-stroke-gemini {
+  stroke: var(--model-line-gemini);
+}
+
+.orbit-value.provider-stroke-nvidia {
+  stroke: var(--model-line-nvidia);
+}
+
+.orbit-value.provider-stroke-groq {
+  stroke: var(--model-line-groq);
+}
+
+.orbit-value.provider-stroke-ollama {
+  stroke: var(--model-line-ollama);
+}
+
+.radar-series.provider-radar-gemini {
+  stroke: var(--model-line-gemini);
+}
+
+.radar-series.provider-radar-nvidia {
+  stroke: var(--model-line-nvidia);
+}
+
+.radar-series.provider-radar-groq {
+  stroke: var(--model-line-groq);
+}
+
+.radar-series.provider-radar-ollama {
+  stroke: var(--model-line-ollama);
+}
+
+.trend-series.provider-trend-gemini polyline,
+.trend-series.provider-trend-gemini circle {
+  stroke: var(--model-line-gemini);
+  fill: var(--model-line-gemini);
+}
+
+.trend-series.provider-trend-nvidia polyline,
+.trend-series.provider-trend-nvidia circle {
+  stroke: var(--model-line-nvidia);
+  fill: var(--model-line-nvidia);
+}
+
+.trend-series.provider-trend-groq polyline,
+.trend-series.provider-trend-groq circle {
+  stroke: var(--model-line-groq);
+  fill: var(--model-line-groq);
+}
+
+.trend-series.provider-trend-ollama polyline,
+.trend-series.provider-trend-ollama circle {
+  stroke: var(--model-line-ollama);
+  fill: var(--model-line-ollama);
+}
+
+.model-chart-legend-dot.provider-bg-gemini {
+  background-color: var(--model-line-gemini);
+}
+
+.model-chart-legend-dot.provider-bg-nvidia {
+  background-color: var(--model-line-nvidia);
+}
+
+.model-chart-legend-dot.provider-bg-groq {
+  background-color: var(--model-line-groq);
+}
+
+.model-chart-legend-dot.provider-bg-ollama {
+  background-color: var(--model-line-ollama);
+}
+
 .provider-fill-gemini,
 .provider-fill-groq,
 .provider-fill-nvidia,
@@ -3316,31 +3412,97 @@
   margin-top: 24px;
 }
 
-.conversation-analytics-scope {
+.conversation-analytics-leader {
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-  margin: 18px 0 10px;
-  border-bottom: 1px solid var(--border);
-  padding-bottom: 8px;
+  align-items: center;
+  gap: 8px 12px;
+  margin: 12px 0 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: rgb(255 255 255 / 4%);
+  padding: 9px 12px;
+  font-size: 11px;
 }
 
-.conversation-analytics-scope > span {
-  color: var(--foreground);
-  font-family: var(--font-heading);
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.conversation-analytics-scope > small {
+.conversation-analytics-leader > span {
   color: var(--muted-foreground);
-  font-size: 10px;
-  text-align: right;
 }
 
-.conversation-average-grid {
-  margin-bottom: 16px;
+.conversation-analytics-leader > strong {
+  overflow: hidden;
+  flex: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.conversation-analytics-leader > b {
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+}
+
+.orbit-model-name {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+  white-space: normal !important;
+}
+
+.orbit-model-name small {
+  overflow: hidden;
+  color: var(--muted-foreground);
+  font-size: 8px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.orbit-leader-tag {
+  flex: 0 0 auto;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 2px 5px;
+  color: var(--foreground);
+  font-size: 8px;
+}
+
+.orbit-leader-summary {
+  margin: 8px 0 0;
+  color: var(--muted-foreground);
+  font-size: 9px;
+}
+
+.orbit-leader-summary strong {
+  color: var(--foreground);
+}
+
+.trend-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px 12px;
+  margin-top: 8px;
+}
+
+.trend-legend > span {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 5px;
+  color: var(--muted-foreground);
+  font-size: 9px;
+}
+
+.trend-legend > span > span {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.trend-legend small {
+  max-width: 110px;
+  overflow: hidden;
+  color: var(--muted-foreground);
+  font-size: 8px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .conversation-leaderboard {
@@ -3406,6 +3568,13 @@
 .conversation-leaderboard-table .conversation-winner-tag {
   display: inline-block;
   margin-left: 6px;
+}
+
+@media (max-width: 767px) {
+  .conversation-analytics-leader {
+    align-items: flex-start;
+    flex-direction: column;
+  }
 }
 
 .conversation-workspace {
