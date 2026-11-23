@@ -3,3 +3,8 @@ __pycache__/
 .venv/
 venv/
 .env
+**/.env
+.env.backup-nvidia
+**/node_modules/
+frontend/dist/
+backend/conversations.sqlite3
